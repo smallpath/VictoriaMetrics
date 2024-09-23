@@ -16,6 +16,8 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/promutils"
 )
 
+var DefaultGroupType string
+
 // Group contains list of Rules grouped into
 // entity with one name and evaluation interval
 type Group struct {
@@ -60,7 +62,7 @@ func (g *Group) UnmarshalYAML(unmarshal func(any) error) error {
 	}
 	// change default value to prometheus datasource.
 	if g.Type.Get() == "" {
-		g.Type.Set(NewPrometheusType())
+		g.Type = NewRawType(DefaultGroupType)
 	}
 
 	h := md5.New()

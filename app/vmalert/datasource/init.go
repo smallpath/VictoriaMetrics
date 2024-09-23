@@ -64,7 +64,7 @@ var (
 		`If true, disables HTTP keep-alive and will only use the connection to the server for a single HTTP request.`)
 	roundDigits = flag.Int("datasource.roundDigits", 0, `Adds "round_digits" GET param to datasource requests. `+
 		`In VM "round_digits" limits the number of digits after the decimal point in response values.`)
-)
+	)
 
 // InitSecretFlags must be called after flag.Parse and before any logging
 func InitSecretFlags() {
@@ -139,7 +139,7 @@ func Init(extraParams url.Values) (QuerierBuilder, error) {
 		datasourceURL:    strings.TrimSuffix(*addr, "/"),
 		appendTypePrefix: *appendTypePrefix,
 		queryStep:        *queryStep,
-		dataSourceType:   datasourcePrometheus,
+		dataSourceType:   toDatasourceType(""),
 		extraParams:      extraParams,
 	}, nil
 }

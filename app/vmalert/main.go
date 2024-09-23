@@ -81,6 +81,7 @@ absolute path to all .tpl files in root.
 	remoteReadIgnoreRestoreErrors = flag.Bool("remoteRead.ignoreRestoreErrors", true, "Whether to ignore errors from remote storage when restoring alerts state on startup. DEPRECATED - this flag has no effect and will be removed in the next releases.")
 
 	dryRun = flag.Bool("dryRun", false, "Whether to check only config files without running vmalert. The rules file are validated. The -rule flag must be specified.")
+	defaultRuleType = flag.String("defaultRuleType", "prometheus", "")
 )
 
 var alertURLGeneratorFn notifier.AlertURLGenerator
@@ -106,6 +107,7 @@ func main() {
 		logger.Fatalf("failed to parse %q: %s", *ruleTemplatesPath, err)
 	}
 
+	config.DefaultGroupType = *defaultRuleType
 	if *dryRun {
 		groups, err := config.Parse(*rulePath, notifier.ValidateTemplates, true)
 		if err != nil {

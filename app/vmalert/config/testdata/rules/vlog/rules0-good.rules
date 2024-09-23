@@ -1,0 +1,12 @@
+groups:
+  - name: vlogrule
+    interval: 5s
+    rules:
+      - alert: rule1
+        expr: "_time:5m | stats by (path) count() if (level:error) as errors,  count() as total | math errors / total as errors_percentage | fields errors_percentage,path"
+        labels:
+          label: bar
+      - record: rule2
+        expr: "_time:5h | stats by (_stream, path) count() as b"
+        labels:
+          label: bar

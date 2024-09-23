@@ -19,14 +19,15 @@ type datasourceType string
 
 const (
 	datasourcePrometheus datasourceType = "prometheus"
+	datasourceVlogs      datasourceType = "vlogs"
 	datasourceGraphite   datasourceType = "graphite"
 )
 
 func toDatasourceType(s string) datasourceType {
-	if s == string(datasourceGraphite) {
-		return datasourceGraphite
+	if s == "" {
+		return datasourcePrometheus
 	}
-	return datasourcePrometheus
+	return datasourceType(s)
 }
 
 // VMStorage represents vmstorage entity with ability to read and write metrics
@@ -86,7 +87,9 @@ func (s *VMStorage) Clone() *VMStorage {
 
 // ApplyParams - changes given querier params.
 func (s *VMStorage) ApplyParams(params QuerierParams) *VMStorage {
-	s.dataSourceType = toDatasourceType(params.DataSourceType)
+	if params.DataSourceType != "" {
+		s.dataSourceType = toDatasourceType(params.DataSourceType)
+	}
 	s.evaluationInterval = params.EvaluationInterval
 	if params.QueryParams != nil {
 		if s.extraParams == nil {
@@ -158,9 +161,14 @@ func (s *VMStorage) Query(ctx context.Context, query string, ts time.Time) (Resu
 	}
 
 	// Process the received response.
-	parseFn := parsePrometheusResponse
-	if s.dataSourceType != datasourcePrometheus {
-		parseFn = parseGraphiteResponse
+	var parseFn func(req *http.Request, resp *http.Response) (Result, error)
+	switch s.dataSourceType {
+		case datasourcePrometheus:
+			parseFn = parsePrometheusResponse
+		case datasourceGraphite:
+			parseFn = parseGraphiteResponse
+		case datasourceVlogs:
+			parseFn = parseVlogsResponse
 	}
 	result, err := parseFn(req, resp)
 	_ = resp.Body.Close()
@@ -171,7 +179,7 @@ func (s *VMStorage) Query(ctx context.Context, query string, ts time.Time) (Resu
 // For Prometheus type see https://prometheus.io/docs/prometheus/latest/querying/api/#range-queries
 // Graphite type isn't supported.
 func (s *VMStorage) QueryRange(ctx context.Context, query string, start, end time.Time) (res Result, err error) {
-	if s.dataSourceType != datasourcePrometheus {
+	if s.dataSourceType == datasourceGraphite {
 		return res, fmt.Errorf("%q is not supported for QueryRange", s.dataSourceType)
 	}
 	if start.IsZero() {
@@ -247,6 +255,8 @@ func (s *VMStorage) newQueryRequest(ctx context.Context, query string, ts time.T
 		s.setPrometheusInstantReqParams(req, query, ts)
 	case datasourceGraphite:
 		s.setGraphiteReqParams(req, query)
+	case datasourceVlogs:
+		s.setVlogsInstantReqParams(req, query, ts)
 	default:
 		logger.Panicf("BUG: engine not found: %q", s.dataSourceType)
 	}
