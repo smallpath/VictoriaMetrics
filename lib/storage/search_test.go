@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
-	"sync/atomic"
 	"testing"
 	"testing/quick"
 	"time"
@@ -212,7 +211,7 @@ func testAssertSearchResult(st *Storage, tr TimeRange, tfs *TagFilters, want []M
 	}
 
 	var s Search
-	s.Init(nil, st, []*TagFilters{tfs}, tr, 1e5, noDeadline, &atomic.Uint64{})
+	s.Init(nil, st, []*TagFilters{tfs}, tr, 1e5, noDeadline)
 	var mbs []metricBlock
 	for s.NextMetricBlock() {
 		var b Block
