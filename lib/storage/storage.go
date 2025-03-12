@@ -15,6 +15,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/VictoriaMetrics/fastcache"
+	"github.com/VictoriaMetrics/metricsql"
+
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/backup/backupnames"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bloomfilter"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
@@ -30,8 +33,6 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/timeutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/uint64set"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/workingsetcache"
-	"github.com/VictoriaMetrics/fastcache"
-	"github.com/VictoriaMetrics/metricsql"
 )
 
 const (
@@ -1259,12 +1260,12 @@ func nextRetentionDeadlineSeconds(atSecs, retentionSecs, offsetSecs int64) int64
 // If -disablePerDayIndex is set or the time range is more than 40 days, the
 // time range is ignored and the metrics are searched within the entire
 // retention period, i.e. the global index are used for searching.
-func (s *Storage) SearchMetricNames(qt *querytracer.Tracer, tfss []*TagFilters, tr TimeRange, maxMetrics int, deadline uint64) ([]string, error) {
+func (s *Storage) SearchMetricNames(qt *querytracer.Tracer, tfss []*TagFilters, tr TimeRange, maxMetrics int, deadline uint64, readMetricIDs *atomic.Uint64) ([]string, error) {
 	tr = s.adjustTimeRange(tr)
 	qt = qt.NewChild("search for matching metric names: filters=%s, timeRange=%s", tfss, &tr)
 	defer qt.Done()
 
-	metricIDs, err := s.idb().searchMetricIDs(qt, tfss, tr, maxMetrics, deadline)
+	metricIDs, err := s.idb().searchMetricIDs(qt, tfss, tr, maxMetrics, deadline, readMetricIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1400,8 +1401,8 @@ var ErrDeadlineExceeded = fmt.Errorf("deadline exceeded")
 // If the number of the series exceeds maxMetrics, no series will be deleted and
 // an error will be returned. Otherwise, the funciton returns the number of
 // metrics deleted.
-func (s *Storage) DeleteSeries(qt *querytracer.Tracer, tfss []*TagFilters, maxMetrics int) (int, error) {
-	deletedCount, err := s.idb().DeleteTSIDs(qt, tfss, maxMetrics)
+func (s *Storage) DeleteSeries(qt *querytracer.Tracer, tfss []*TagFilters, maxMetrics int, readMetricIDs *atomic.Uint64) (int, error) {
+	deletedCount, err := s.idb().DeleteTSIDs(qt, tfss, maxMetrics, readMetricIDs)
 	if err != nil {
 		return deletedCount, fmt.Errorf("cannot delete tsids: %w", err)
 	}
@@ -1422,9 +1423,9 @@ func (s *Storage) DeleteSeries(qt *querytracer.Tracer, tfss []*TagFilters, maxMe
 // If -disablePerDayIndex is set or the time range is more than 40 days, the
 // time range is ignored and the label names are searched within the entire
 // retention period, i.e. the global index are used for searching.
-func (s *Storage) SearchLabelNames(qt *querytracer.Tracer, accountID, projectID uint32, tfss []*TagFilters, tr TimeRange, maxLabelNames, maxMetrics int, deadline uint64) ([]string, error) {
+func (s *Storage) SearchLabelNames(qt *querytracer.Tracer, accountID, projectID uint32, tfss []*TagFilters, tr TimeRange, maxLabelNames, maxMetrics int, deadline uint64, readMetricIDs *atomic.Uint64) ([]string, error) {
 	tr = s.adjustTimeRange(tr)
-	return s.idb().SearchLabelNames(qt, accountID, projectID, tfss, tr, maxLabelNames, maxMetrics, deadline)
+	return s.idb().SearchLabelNames(qt, accountID, projectID, tfss, tr, maxLabelNames, maxMetrics, deadline, readMetricIDs)
 }
 
 // SearchLabelValues searches for label values for the given labelName, filters
@@ -1437,9 +1438,8 @@ func (s *Storage) SearchLabelNames(qt *querytracer.Tracer, accountID, projectID 
 // If -disablePerDayIndex is set or the time range is more than 40 days, the
 // time range is ignored and the label values are searched within the entire
 // retention period, i.e. the global index are used for searching.
-func (s *Storage) SearchLabelValues(qt *querytracer.Tracer, accountID, projectID uint32, labelName string, tfss []*TagFilters, tr TimeRange, maxLabelValues, maxMetrics int, deadline uint64) ([]string, error) {
+func (s *Storage) SearchLabelValues(qt *querytracer.Tracer, accountID, projectID uint32, labelName string, tfss []*TagFilters, tr TimeRange, maxLabelValues, maxMetrics int, deadline uint64, readMetricIDs *atomic.Uint64) ([]string, error) {
 	tr = s.adjustTimeRange(tr)
-
 	idb := s.idb()
 
 	key := labelName
@@ -1451,7 +1451,7 @@ func (s *Storage) SearchLabelValues(qt *querytracer.Tracer, accountID, projectID
 		// without any filters and limits and then later applying the filter and the limit to the found label values.
 		qt.Printf("search for up to %d values for the label %q on the time range %s", maxMetrics, labelName, &tr)
 
-		lvs, err := idb.SearchLabelValues(qt, accountID, projectID, labelName, nil, tr, maxMetrics, maxMetrics, deadline)
+		lvs, err := idb.SearchLabelValues(qt, accountID, projectID, labelName, nil, tr, maxMetrics, maxMetrics, deadline, readMetricIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -1474,7 +1474,7 @@ func (s *Storage) SearchLabelValues(qt *querytracer.Tracer, accountID, projectID
 		qt.Printf("fall back to slow search because only a subset of label values is found")
 	}
 
-	return idb.SearchLabelValues(qt, accountID, projectID, labelName, tfss, tr, maxLabelValues, maxMetrics, deadline)
+	return idb.SearchLabelValues(qt, accountID, projectID, labelName, tfss, tr, maxLabelValues, maxMetrics, deadline, readMetricIDs)
 }
 
 func filterLabelValues(accountID, projectID uint32, lvs []string, tf *tagFilter, key string) []string {
@@ -1725,11 +1725,11 @@ func (s *Storage) SearchTenants(qt *querytracer.Tracer, tr TimeRange, deadline u
 //
 // Otherwise, the date is ignored and the status is calculated for the entire
 // retention period, i.e. the global index are used for calculation.
-func (s *Storage) GetTSDBStatus(qt *querytracer.Tracer, accountID, projectID uint32, tfss []*TagFilters, date uint64, focusLabel string, topN, maxMetrics int, deadline uint64) (*TSDBStatus, error) {
+func (s *Storage) GetTSDBStatus(qt *querytracer.Tracer, accountID, projectID uint32, tfss []*TagFilters, date uint64, focusLabel string, topN, maxMetrics int, deadline uint64, readMetricIDs *atomic.Uint64) (*TSDBStatus, error) {
 	if s.disablePerDayIndex {
 		date = globalIndexDate
 	}
-	return s.idb().GetTSDBStatus(qt, accountID, projectID, tfss, date, focusLabel, topN, maxMetrics, deadline)
+	return s.idb().GetTSDBStatus(qt, accountID, projectID, tfss, date, focusLabel, topN, maxMetrics, deadline, readMetricIDs)
 }
 
 // MetricRow is a metric to insert into storage.

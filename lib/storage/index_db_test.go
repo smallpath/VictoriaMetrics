@@ -790,7 +790,7 @@ func testIndexDBCheckTSIDByName(db *indexDB, mns []MetricName, tsids []TSID, ten
 		}
 
 		// Test SearchLabelValues
-		lvs, err := db.SearchLabelValues(nil, mn.AccountID, mn.ProjectID, "__name__", nil, TimeRange{}, 1e5, 1e9, noDeadline)
+		lvs, err := db.SearchLabelValues(nil, mn.AccountID, mn.ProjectID, "__name__", nil, TimeRange{}, 1e5, 1e9, noDeadline, &atomic.Uint64{})
 		if err != nil {
 			return fmt.Errorf("error in SearchLabelValues(labelName=%q): %w", "__name__", err)
 		}
@@ -804,7 +804,7 @@ func testIndexDBCheckTSIDByName(db *indexDB, mns []MetricName, tsids []TSID, ten
 		}
 		for i := range mn.Tags {
 			tag := &mn.Tags[i]
-			lvs, err := db.SearchLabelValues(nil, mn.AccountID, mn.ProjectID, string(tag.Key), nil, TimeRange{}, 1e5, 1e9, noDeadline)
+			lvs, err := db.SearchLabelValues(nil, mn.AccountID, mn.ProjectID, string(tag.Key), nil, TimeRange{}, 1e5, 1e9, noDeadline, &atomic.Uint64{})
 			if err != nil {
 				return fmt.Errorf("error in SearchLabelValues(labelName=%q): %w", tag.Key, err)
 			}
@@ -817,7 +817,7 @@ func testIndexDBCheckTSIDByName(db *indexDB, mns []MetricName, tsids []TSID, ten
 
 	// Test SearchLabelNames (empty filters, global time range)
 	for k, labelNames := range allLabelNames {
-		lns, err := db.SearchLabelNames(nil, k.AccountID, k.ProjectID, nil, TimeRange{}, 1e5, 1e9, noDeadline)
+		lns, err := db.SearchLabelNames(nil, k.AccountID, k.ProjectID, nil, TimeRange{}, 1e5, 1e9, noDeadline, &atomic.Uint64{})
 		if err != nil {
 			return fmt.Errorf("error in SearchLabelNames(empty filter, global time range): %w", err)
 		}
@@ -1090,7 +1090,7 @@ func testIndexDBCheckTSIDByName(db *indexDB, mns []MetricName, tsids []TSID, ten
 }
 
 func searchTSIDsInTest(db *indexDB, tfss []*TagFilters, tr TimeRange) ([]TSID, error) {
-	metricIDs, err := db.searchMetricIDs(nil, tfss, tr, 1e5, noDeadline)
+	metricIDs, err := db.searchMetricIDs(nil, tfss, tr, 1e5, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		return nil, err
 	}
@@ -1822,7 +1822,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 		MinTimestamp: int64(now) - msecPerDay,
 		MaxTimestamp: int64(now),
 	}
-	lns, err := db.SearchLabelNames(nil, accountID, projectID, nil, tr, 10000, 1e9, noDeadline)
+	lns, err := db.SearchLabelNames(nil, accountID, projectID, nil, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelNames(timeRange=%s): %s", &tr, err)
 	}
@@ -1832,7 +1832,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelValues with the specified time range.
-	lvs, err := db.SearchLabelValues(nil, accountID, projectID, "", nil, tr, 10000, 1e9, noDeadline)
+	lvs, err := db.SearchLabelValues(nil, accountID, projectID, "", nil, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelValues(timeRange=%s): %s", &tr, err)
 	}
@@ -1869,7 +1869,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelNames with the specified filter.
-	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfs}, TimeRange{}, 10000, 1e9, noDeadline)
+	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfs}, TimeRange{}, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelNames(filters=%s): %s", tfs, err)
 	}
@@ -1879,7 +1879,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelNames with the specified filter and time range.
-	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfs}, tr, 10000, 1e9, noDeadline)
+	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfs}, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelNames(filters=%s, timeRange=%s): %s", tfs, &tr, err)
 	}
@@ -1889,7 +1889,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelNames with filters on metric name and time range.
-	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfsMetricName}, tr, 10000, 1e9, noDeadline)
+	lns, err = db.SearchLabelNames(nil, accountID, projectID, []*TagFilters{tfsMetricName}, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelNames(filters=%s, timeRange=%s): %s", tfs, &tr, err)
 	}
@@ -1899,7 +1899,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelValues with the specified filter.
-	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfs}, TimeRange{}, 10000, 1e9, noDeadline)
+	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfs}, TimeRange{}, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelValues(filters=%s): %s", tfs, err)
 	}
@@ -1909,7 +1909,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelValues with the specified filter and time range.
-	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfs}, tr, 10000, 1e9, noDeadline)
+	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfs}, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelValues(filters=%s, timeRange=%s): %s", tfs, &tr, err)
 	}
@@ -1919,7 +1919,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check SearchLabelValues with filters on metric name and time range.
-	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfsMetricName}, tr, 10000, 1e9, noDeadline)
+	lvs, err = db.SearchLabelValues(nil, accountID, projectID, "", []*TagFilters{tfsMetricName}, tr, 10000, 1e9, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("unexpected error in SearchLabelValues(filters=%s, timeRange=%s): %s", tfs, &tr, err)
 	}
@@ -1943,7 +1943,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check GetTSDBStatus with nil filters.
-	status, err := db.GetTSDBStatus(nil, accountID, projectID, nil, baseDate, "day", 5, 1e6, noDeadline)
+	status, err := db.GetTSDBStatus(nil, accountID, projectID, nil, baseDate, "day", 5, 1e6, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("error in GetTSDBStatus with nil filters: %s", err)
 	}
@@ -2057,7 +2057,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	if err := tfs.Add([]byte("day"), []byte("0"), false, false); err != nil {
 		t.Fatalf("cannot add filter: %s", err)
 	}
-	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, baseDate, "", 5, 1e6, noDeadline)
+	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, baseDate, "", 5, 1e6, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("error in GetTSDBStatus: %s", err)
 	}
@@ -2083,7 +2083,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check GetTSDBStatus with non-nil filter, which matches all the series on a global time range
-	status, err = db.GetTSDBStatus(nil, accountID, projectID, nil, 0, "day", 5, 1e6, noDeadline)
+	status, err = db.GetTSDBStatus(nil, accountID, projectID, nil, 0, "day", 5, 1e6, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("error in GetTSDBStatus: %s", err)
 	}
@@ -2138,7 +2138,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	if err := tfs.Add([]byte("UniqueId"), []byte("0|1|3"), false, true); err != nil {
 		t.Fatalf("cannot add filter: %s", err)
 	}
-	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, baseDate, "", 5, 1e6, noDeadline)
+	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, baseDate, "", 5, 1e6, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("error in GetTSDBStatus: %s", err)
 	}
@@ -2164,7 +2164,7 @@ func TestSearchTSIDWithTimeRange(t *testing.T) {
 	}
 
 	// Check GetTSDBStatus with non-nil filter on global time range, which matches only 15 series
-	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, 0, "", 5, 1e6, noDeadline)
+	status, err = db.GetTSDBStatus(nil, accountID, projectID, []*TagFilters{tfs}, 0, "", 5, 1e6, noDeadline, &atomic.Uint64{})
 	if err != nil {
 		t.Fatalf("error in GetTSDBStatus: %s", err)
 	}
