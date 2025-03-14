@@ -16,7 +16,20 @@ according to [these docs](https://docs.victoriametrics.com/victorialogs/quicksta
 
 ## tip
 
-* BUGFIX: [vlinsert](https://docs.victoriametrics.com/victorialogs/): support timestamps with decimal points for elasticsearch ingestion protocol. See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8470).
+**Update note: this release changes data storage format in backwards-incompatible way, so it is impossible to downgrade to the previous releases after upgrading to this release.
+It is safe upgrading to this release and all the future releases from older releases.**
+
+* FEATURE: improve performance when processing constant log fields with length exceeding 256 bytes. For example, repeated stack traces.
+
+## [v1.16.0](https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v1.16.0-victorialogs)
+
+Released at 2025-03-12
+
+* FEATURE: [Loki data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/promtail/): automatically parse JSON-encoded log fields from the plaintext log message and store them as separate [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model). This behavior allows achieving lower disk space usage and higher query performance comparing to the case when the JSON-encoded log fields were stored in VictoriaLogs as a plaintext log message, which should be parsed at query time with [`unpack_json` pipe](https://docs.victoriametrics.com/victorialogs/logsql/#unpack_json-pipe). The previous behaviour can be restored if needed by passing `-loki.disableMessageParsing` command-line flag to VictoriaLogs (the previous behavior isn't recommended because it is less efficient). See [this feature request](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8486).
+
+* BUGFIX: [querying](https://docs.victoriametrics.com/victorialogs/querying/): properly parse floating-point numbers with leading zeroes in fractional part (for example, `12.03` or `1.0002`). Parsing for these numbers has been broken in [v1.15.0](https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v1.15.0-victorialogs). See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8464).
+* BUGFIX: [data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/): support floating-point timestamps for [Elasticsearch data ingestion protocol](https://docs.victoriametrics.com/victorialogs/data-ingestion/#elasticsearch-bulk-api). See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8470).
+* BUGFIX: [OpenTelemetry data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/opentelemetry/): properly convert nested OpenTelemetry attributes into JSON. See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8384).
 
 ## [v1.15.0](https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v1.15.0-victorialogs)
 
@@ -28,9 +41,9 @@ Released at 2025-02-27
 * FEATURE: allow passing `*` as a subquery inside [`in(*)`, `contains_any(*)` and `contains_all(*)` filters](https://docs.victoriametrics.com/victorialogs/logsql/#subquery-filter). Such filters are treated as `match all` aka `*`. This is going to be used by [Grafana plugin for VictoriaLogs](https://docs.victoriametrics.com/victorialogs/victorialogs-datasource/). See [this issue](https://github.com/VictoriaMetrics/victorialogs-datasource/issues/238#issuecomment-2685447673).
 * FEATURE: [victorialogs dashboard](https://grafana.com/grafana/dashboards/22084-victorialogs/): add panels to display amount of ingested logs in bytes, latency of [select APIs](https://docs.victoriametrics.com/victorialogs/querying/#http-api) calls, troubleshooting panels.
 * FEATURE: provide alternative registry for all VictoriaLogs components at [Quay.io](https://quay.io/organization/victoriametrics): [VictoriaLogs](https://quay.io/repository/victoriametrics/victoria-logs?tab=tags) and [vlogscli](https://quay.io/repository/victoriametrics/vlogscli?tab=tags).
+* FEATURE: [data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/): support zstd compression for all HTTP-based ingestion protocols. See [this](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8380) and [this](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8300) issues.
 
 * BUGFIX: do not treat a string containing leading zeros as a number during data ingestion and querying. For example, `00123` string shouldn't be treated as `123` number. See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8361).
-* BUGFIX: [data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/): Properly convert nested OpenTelemetry attributes into JSON. See [this issue](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/8384).
 
 ## [v1.14.0](https://github.com/VictoriaMetrics/VictoriaMetrics/releases/tag/v1.14.0-victorialogs)
 
@@ -66,7 +79,7 @@ Released at 2025-02-20
 Released at 2025-02-19
 
 **Update note: this release changes data storage format in backwards-incompatible way, so it is impossible to downgrade to the previous releases after upgrading to this release.
-It is safe upgrading to this release from older releases.**
+It is safe upgrading to this release and all the future releases from older releases.**
 
 * FEATURE: improve per-field data locality on disk. This reduces overhead related to reading data from unrelated fields during queries. This improves query performance over structured logs with big number of fields (aka [wide events](https://jeremymorrell.dev/blog/a-practitioners-guide-to-wide-events/)) when only a small portion of fields are used in the query.
 * FEATURE: [data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/): reduce memory usage by up to 4x when ingesting [wide events](https://jeremymorrell.dev/blog/a-practitioners-guide-to-wide-events/) at high rate into VictoriaLogs.

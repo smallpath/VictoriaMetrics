@@ -1,6 +1,7 @@
 package loki
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestParseProtobufRequest_Success(t *testing.T) {
 		t.Helper()
 
 		tlp := &testLogMessageProcessor{}
-		if err := parseJSONRequest([]byte(s), tlp, false); err != nil {
+		if err := parseJSONRequest(strings.NewReader(s), "", tlp, nil, false, false); err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		if len(tlp.pr.Streams) != len(timestampsExpected) {
@@ -61,10 +62,17 @@ func TestParseProtobufRequest_Success(t *testing.T) {
 		}
 
 		data := tlp.pr.MarshalProtobuf(nil)
-		encodedData := snappy.Encode(nil, data)
+		var buf bytes.Buffer
+		w := snappy.NewBufferedWriter(&buf)
+		if _, err := w.Write(data); err != nil {
+			t.Fatalf("failed to compress snappy data: %s", err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("failed to close buffer: %s", err)
+		}
 
 		tlp2 := &insertutils.TestLogMessageProcessor{}
-		if err := parseProtobufRequest(encodedData, tlp2, false); err != nil {
+		if err := parseProtobufRequest(&buf, "snappy", tlp2, nil, false, false); err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		if err := tlp2.Verify(timestampsExpected, resultExpected); err != nil {
@@ -119,6 +127,65 @@ func TestParseProtobufRequest_Success(t *testing.T) {
 }`, []int64{1577836800000000001, 1577836900005000002, 1877836900005000002}, `{"foo":"bar","a":"b","_msg":"foo bar"}
 {"foo":"bar","a":"b","_msg":"abc"}
 {"x":"y","_msg":"yx"}`)
+}
+
+func TestParseProtobufRequest_ParseMessage(t *testing.T) {
+	f := func(s string, msgFields []string, timestampsExpected []int64, resultExpected string) {
+		t.Helper()
+
+		tlp := &testLogMessageProcessor{}
+		if err := parseJSONRequest(strings.NewReader(s), "", tlp, nil, false, false); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if len(tlp.pr.Streams) != len(timestampsExpected) {
+			t.Fatalf("unexpected number of streams; got %d; want %d", len(tlp.pr.Streams), len(timestampsExpected))
+		}
+
+		data := tlp.pr.MarshalProtobuf(nil)
+		var buf bytes.Buffer
+		w := snappy.NewBufferedWriter(&buf)
+		if _, err := w.Write(data); err != nil {
+			t.Fatalf("failed to compress snappy data: %s", err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("failed to close buffer: %s", err)
+		}
+
+		tlp2 := &insertutils.TestLogMessageProcessor{}
+		if err := parseProtobufRequest(&buf, "snappy", tlp2, msgFields, false, true); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := tlp2.Verify(timestampsExpected, resultExpected); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	f(`{
+	"streams": [
+		{
+			"stream": {
+				"foo": "bar",
+				"a": "b"
+			},
+			"values": [
+				["1577836800000000001", "{\"user_id\":\"123\"}"],
+				["1577836900005000002", "abc", {"trace_id":"pqw"}],
+				["1577836900005000003", "{def}"]
+			]
+		},
+		{
+			"stream": {
+				"x": "y"
+			},
+			"values": [
+				["1877836900005000004", "{\"trace_id\":\"432\",\"parent_id\":\"qwerty\"}"]
+			]
+		}
+	]
+}`, []string{"a", "trace_id"}, []int64{1577836800000000001, 1577836900005000002, 1577836900005000003, 1877836900005000004}, `{"foo":"bar","a":"b","user_id":"123"}
+{"foo":"bar","a":"b","trace_id":"pqw","_msg":"abc"}
+{"foo":"bar","a":"b","_msg":"{def}"}
+{"x":"y","_msg":"432","parent_id":"qwerty"}`)
 }
 
 func TestParsePromLabels_Success(t *testing.T) {
