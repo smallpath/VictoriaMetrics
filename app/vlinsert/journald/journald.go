@@ -223,7 +223,10 @@ func parseJournaldRequest(data []byte, lmp insertutil.LogMessageProcessor, cp *i
 
 		if *journaldIncludeEntryMetadata || !strings.HasPrefix(name, "__") {
 			if *journaldPriorityAsLevel && name == "PRIORITY" {
-				name = "level"
+				fields = append(fields, logstorage.Field{
+					Name:  "level",
+					Value: value,
+				})
 			}
 			fields = append(fields, logstorage.Field{
 				Name:  name,
