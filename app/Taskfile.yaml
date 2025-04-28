@@ -1,0 +1,154 @@
+version: '3'
+
+# Base Taskfile for VM applications
+# This file provides common variables and tasks shared by all components
+# To be included by individual component Taskfiles
+
+vars:
+  # Core configuration values
+  PKG_PREFIX: github.com/VictoriaMetrics/VictoriaMetrics
+  MAKE_CONCURRENCY: '{{.MAKE_CONCURRENCY | default "4"}}'
+  DATEINFO_TAG: '{{.DATEINFO_TAG | default "20060102-150405"}}'
+  BUILDINFO_TAG: '{{.BUILDINFO_TAG | default "heads-taskfile-0-g28ca33e67"}}'
+  LATEST_TAG: '{{.LATEST_TAG | default "cluster-latest"}}'
+  PKG_TAG: '{{.PKG_TAG | default .BUILDINFO_TAG}}'
+  GO_BUILDINFO: -X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'
+  TAR_OWNERSHIP: --owner=1000 --group=1000
+  
+  # Build environment variables
+  GOOS: '{{OS}}'
+  GOARCH: '{{ARCH}}'
+  CGO_ENABLED: '1'
+  RACE: ''
+  
+  # Docker-related variables
+  DOCKER_OPTS: '--rm --cpus=8 --memory=8g'
+  DOCKER_ARCH: 'linux/amd64'
+
+tasks:
+  # Common build tasks with parameterization
+  app-local:
+    desc: Build app locally
+    cmds:
+      - CGO_ENABLED=1 go build {{.RACE}} -ldflags "-X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'" -o ../bin/{{.APP_NAME}}{{.RACE}} {{.PKG_PREFIX}}/app/{{.APP_NAME}}
+
+  app-local-pure:
+    desc: Build app locally in pure Go mode (no CGO)
+    cmds:
+      - CGO_ENABLED=0 go build {{.RACE}} -ldflags "-X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'" -o ../bin/{{.APP_NAME}}-pure{{.RACE}} {{.PKG_PREFIX}}/app/{{.APP_NAME}}
+
+  app-local-goos-goarch:
+    desc: Build app locally for specific OS/architecture
+    cmds:
+      - CGO_ENABLED={{.CGO_ENABLED}} GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build {{.RACE}} -ldflags "-X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'" -o ../bin/{{.APP_NAME}}-{{.GOOS}}-{{.GOARCH}}{{.RACE}} {{.PKG_PREFIX}}/app/{{.APP_NAME}}
+
+  app-local-windows-goarch:
+    desc: Build app locally for Windows with specified architecture
+    cmds:
+      - CGO_ENABLED=0 GOOS=windows GOARCH={{.GOARCH}} go build {{.RACE}} -ldflags "-X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'" -o ../bin/{{.APP_NAME}}-windows-{{.GOARCH}}{{.RACE}}.exe {{.PKG_PREFIX}}/app/{{.APP_NAME}}
+
+  # Docker tasks
+  app-via-docker:
+    desc: Build app via Docker
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} RACE={{.RACE}} make app-local
+
+  app-via-docker-pure:
+    desc: Build app via Docker in pure Go mode (no CGO)
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} make app-local-pure
+
+  # Platform-specific Docker builds
+  app-via-docker-linux-amd64:
+    desc: Build app via Docker for Linux/amd64
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} --platform=linux/amd64 -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} GOOS=linux GOARCH=amd64 make app-local-goos-goarch
+
+  app-via-docker-linux-arm64:
+    desc: Build app via Docker for Linux/arm64
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} --platform=linux/arm64 -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} GOOS=linux GOARCH=arm64 make app-local-goos-goarch
+
+  app-via-docker-windows-amd64:
+    desc: Build app via Docker for Windows/amd64
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} GOOS=windows GOARCH=amd64 make app-local-windows-goarch
+
+  # Packaging tasks
+  package-via-docker:
+    desc: Package app via Docker
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} RACE={{.RACE}} make package-via-docker
+
+  # Platform-specific packaging
+  package-via-docker-platform:
+    desc: Package app via Docker for a specific platform
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} --platform={{.DOCKER_PLATFORM}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} make package-via-docker
+
+  package-via-docker-amd64:
+    desc: Package app via Docker for amd64
+    cmds:
+      - task: package-via-docker-platform
+        vars: {DOCKER_PLATFORM: linux/amd64}
+
+  package-via-docker-arm:
+    desc: Package app via Docker for arm
+    cmds:
+      - task: package-via-docker-platform
+        vars: {DOCKER_PLATFORM: linux/arm}
+
+  package-via-docker-arm64:
+    desc: Package app via Docker for arm64
+    cmds:
+      - task: package-via-docker-platform
+        vars: {DOCKER_PLATFORM: linux/arm64}
+
+  package-via-docker-ppc64le:
+    desc: Package app via Docker for ppc64le
+    cmds:
+      - task: package-via-docker-platform
+        vars: {DOCKER_PLATFORM: linux/ppc64le}
+
+  package-via-docker-386:
+    desc: Package app via Docker for 386
+    cmds:
+      - task: package-via-docker-platform
+        vars: {DOCKER_PLATFORM: linux/386}
+
+  # Testing tasks
+  test-app:
+    desc: Run tests for app
+    dir: .
+    cmds:
+      - ls
+      - go test -v ./{{.APP_NAME}}/...
+
+  test-app-race:
+    desc: Run tests for app with race detector
+    cmds:
+      - go test -v -race ./{{.APP_NAME}}/...
+
+  bench-app:
+    desc: Run benchmarks for app
+    cmds:
+      - go test -bench=. ./{{.APP_NAME}}/...
+
+  # Docker image build and publish
+  docker-app:
+    desc: Build app Docker image
+    cmds:
+      - DOCKER_BUILDKIT=1 DOCKER_CLI_EXPERIMENTAL=enabled docker buildx build -t {{.DOCKER_NAMESPACE}}/{{.APP_NAME}}:latest-PR -f ../deployment/Dockerfile ../../
+
+  publish-app:
+    desc: Publish app Docker image
+    cmds:
+      - mkdir -p ../bin
+      - cd .. && docker run {{.DOCKER_OPTS}} -v $(pwd):/VictoriaMetrics -w /VictoriaMetrics local/builder env APP_NAME={{.APP_NAME}} RACE={{.RACE}} DOCKER_NAMESPACE={{.DOCKER_NAMESPACE}} LATEST_TAG={{.LATEST_TAG}} make publish 

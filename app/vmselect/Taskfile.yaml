@@ -1,0 +1,251 @@
+version: '3'
+
+# Tasks for vmselect app
+# This file contains vmselect-specific tasks and overrides
+
+includes:
+  base:
+    taskfile: ../
+    dir: ..
+    internal: true
+
+vars:
+  APP_NAME: vmselect
+  DOCKER_NAMESPACE: victoriametrics
+
+tasks:
+  # Default task - run locally with default config
+  default:
+    desc: Build and run vmselect locally with default config
+    cmds:
+      - task: run-local
+        vars: {RUN_ARGS: -httpListenAddr=:8481}
+
+  # Build and run tasks
+  build:
+    desc: Build vmselect locally
+    cmds:
+      - task: base:app-local
+
+  build-pure:
+    desc: Build vmselect locally in pure Go mode (no CGO)
+    cmds:
+      - task: base:app-local-pure
+
+  build-race:
+    desc: Build vmselect locally with race detector
+    cmds:
+      - task: base:app-local
+        vars: {RACE: -race}
+
+  run-local:
+    desc: Run vmselect locally
+    deps:
+      - vmselect
+    cmds:
+      - ../bin/vmselect {{.RUN_ARGS}}
+
+  run-local-pure:
+    desc: Run vmselect locally in pure Go mode (no CGO)
+    deps:
+      - build-pure
+    cmds:
+      - ../bin/build-pure {{.RUN_ARGS}}
+
+  # Platform specific builds - using templates
+  build-goos-goarch:
+    desc: Build vmselect for specific OS/architecture
+    cmds:
+      - task: base:app-local-goos-goarch
+        vars: {GOOS: '{{.GOOS}}', GOARCH: '{{.GOARCH}}', CGO_ENABLED: '{{.CGO_ENABLED}}'}
+
+  build-windows-goarch:
+    desc: Build vmselect for Windows with specified architecture
+    cmds:
+      - task: base:app-local-windows-goarch
+        vars: {GOARCH: '{{.GOARCH}}'}
+
+  # Define tasks for each platform using templated pattern
+  build-linux-amd64:
+    desc: Build vmselect for Linux/amd64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: linux, GOARCH: amd64, CGO_ENABLED: 1}
+
+  build-linux-arm:
+    desc: Build vmselect for Linux/arm
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: linux, GOARCH: arm, CGO_ENABLED: 0}
+
+  build-linux-arm64:
+    desc: Build vmselect for Linux/arm64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: linux, GOARCH: arm64, CGO_ENABLED: 0}
+
+  build-linux-ppc64le:
+    desc: Build vmselect for Linux/ppc64le
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: linux, GOARCH: ppc64le, CGO_ENABLED: 0}
+
+  build-linux-386:
+    desc: Build vmselect for Linux/386
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: linux, GOARCH: 386, CGO_ENABLED: 0}
+
+  build-freebsd-amd64:
+    desc: Build vmselect for FreeBSD/amd64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: freebsd, GOARCH: amd64, CGO_ENABLED: 0}
+
+  build-openbsd-amd64:
+    desc: Build vmselect for OpenBSD/amd64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: openbsd, GOARCH: amd64, CGO_ENABLED: 0}
+
+  build-windows-amd64:
+    desc: Build vmselect for Windows/amd64
+    cmds:
+      - task: build-windows-goarch
+        vars: {GOARCH: amd64}
+
+  build-darwin-amd64:
+    desc: Build vmselect for macOS/amd64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: darwin, GOARCH: amd64, CGO_ENABLED: 0}
+
+  build-darwin-arm64:
+    desc: Build vmselect for macOS/arm64
+    cmds:
+      - task: build-goos-goarch
+        vars: {GOOS: darwin, GOARCH: arm64, CGO_ENABLED: 0}
+
+  # Production builds
+  build-prod:
+    desc: Build vmselect for production via Docker
+    cmds:
+      - task: base:app-via-docker
+
+  build-pure-prod:
+    desc: Build vmselect for production in pure Go mode (no CGO) via Docker
+    cmds:
+      - task: base:app-via-docker-pure
+
+  # Platform-specific production builds
+  build-goos-goarch-prod:
+    desc: Build vmselect for specific OS/architecture for production
+    cmds:
+      - task: "base:app-via-docker-{{.GOOS}}-{{.GOARCH}}"
+
+  # Define tasks for each platform
+  build-linux-amd64-prod:
+    desc: Build vmselect for Linux/amd64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: linux, GOARCH: amd64}
+
+  build-linux-arm-prod:
+    desc: Build vmselect for Linux/arm for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: linux, GOARCH: arm}
+
+  build-linux-arm64-prod:
+    desc: Build vmselect for Linux/arm64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: linux, GOARCH: arm64}
+
+  build-linux-ppc64le-prod:
+    desc: Build vmselect for Linux/ppc64le for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: linux, GOARCH: ppc64le}
+
+  build-linux-386-prod:
+    desc: Build vmselect for Linux/386 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: linux, GOARCH: 386}
+
+  build-freebsd-amd64-prod:
+    desc: Build vmselect for FreeBSD/amd64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: freebsd, GOARCH: amd64}
+
+  build-openbsd-amd64-prod:
+    desc: Build vmselect for OpenBSD/amd64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: openbsd, GOARCH: amd64}
+
+  build-windows-amd64-prod:
+    desc: Build vmselect for Windows/amd64 for production
+    cmds:
+      - task: base:app-via-docker-windows-amd64
+
+  build-darwin-amd64-prod:
+    desc: Build vmselect for macOS/amd64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: darwin, GOARCH: amd64}
+
+  build-darwin-arm64-prod:
+    desc: Build vmselect for macOS/arm64 for production
+    cmds:
+      - task: build-goos-goarch-prod
+        vars: {GOOS: darwin, GOARCH: arm64}
+
+  # Package tasks
+  package:
+    desc: Package vmselect
+    cmds:
+      - task: base:app-via-docker
+
+  # Docker-related tasks
+  docker:
+    desc: Build vmselect Docker image
+    cmds:
+      - task: base:docker-app
+
+  publish:
+    desc: Publish vmselect Docker image
+    cmds:
+      - task: base:publish-app
+
+  test:
+    desc: Run tests for vmselect
+    cmds:
+      - ls
+      - task: base:test-app
+
+  test-race:
+    desc: Run tests for vmselect with race detector
+    cmds:
+      - task: base:test-app-race
+
+  bench:
+    desc: Run benchmarks for vmselect
+    cmds:
+      - task: base:bench-app
+
+  build-cross:
+    desc: Build vmselect for all supported platforms
+    cmds:
+      - task: build-linux-amd64
+      - task: build-linux-arm
+      - task: build-linux-arm64
+      - task: build-linux-ppc64le
+      - task: build-linux-386
+      - task: build-freebsd-amd64
+      - task: build-openbsd-amd64
+      - task: build-windows-amd64
+      - task: build-darwin-amd64
+      - task: build-darwin-arm64 

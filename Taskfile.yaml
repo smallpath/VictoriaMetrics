@@ -1,0 +1,399 @@
+version: '3'
+
+# Main Taskfile for VictoriaMetrics
+# This file contains all common operations and configurations used across the VM applications.
+# It includes component Taskfiles using namespaces.
+
+includes:
+  base:
+    taskfile: ./app/Taskfile.yaml
+    dir: ./app
+    internal: true
+  vminsert:
+    taskfile: ./app/vminsert/Taskfile.yaml
+    dir: ./app/vminsert
+  vmselect:
+    taskfile: ./app/vmselect/Taskfile.yaml
+    dir: ./app/vmselect
+  vmstorage:
+    taskfile: ./app/vmstorage/Taskfile.yaml
+    dir: ./app/vmstorage
+
+vars:
+  # Core configuration values
+  PKG_PREFIX: github.com/VictoriaMetrics/VictoriaMetrics
+  MAKE_CONCURRENCY: '{{.MAKE_CONCURRENCY | default "4"}}'
+  DATEINFO_TAG: '{{.DATEINFO_TAG | default "20060102-150405"}}'
+  BUILDINFO_TAG: '{{.BUILDINFO_TAG | default "heads-taskfile-0-g28ca33e67"}}'
+  LATEST_TAG: '{{.LATEST_TAG | default "cluster-latest"}}'
+  PKG_TAG: '{{.PKG_TAG | default .BUILDINFO_TAG}}'
+  GO_BUILDINFO: -X '{{.PKG_PREFIX}}/lib/buildinfo.Version={{.APP_NAME}}-{{.DATEINFO_TAG}}-{{.BUILDINFO_TAG}}'
+  TAR_OWNERSHIP: --owner=1000 --group=1000
+  
+  # Build environment variables
+  GOOS: '{{OS}}'
+  GOARCH: '{{ARCH}}'
+  CGO_ENABLED: '1'
+  RACE: ''
+  
+  # Docker-related variables
+  DOCKER_OPTS: '--rm --cpus=8 --memory=8g'
+  DOCKER_ARCH: 'linux/amd64'
+  
+  # Supported platform combinations for builds
+  PLATFORMS: '{"linux-amd64":{"cgo":"1"},"linux-arm":{"cgo":"0"},"linux-arm64":{"cgo":"0"},"linux-ppc64le":{"cgo":"0"},"linux-386":{"cgo":"0"},"freebsd-amd64":{"cgo":"0"},"openbsd-amd64":{"cgo":"0"},"windows-amd64":{"cgo":"0"},"darwin-amd64":{"cgo":"0"},"darwin-arm64":{"cgo":"0"}}'
+
+tasks:
+  # Default task
+  default:
+    desc: Run the default build task which executes the 'all' task
+    deps:
+      - all
+
+  # Core build tasks
+  all:
+    desc: Build all VictoriaMetrics components
+    deps:
+      - vminsert:build
+      - vmselect:build
+      - vmstorage:build
+
+  all-pure:
+    desc: Build all VictoriaMetrics components in pure Go mode (no CGO)
+    deps:
+      - vminsert:build-pure
+      - vmselect:build-pure
+      - vmstorage:build-pure
+
+  clean:
+    desc: Remove all built binaries
+    cmds:
+      - rm -rf bin/*
+
+  # VM cluster components for all platforms
+  vmcluster:
+    desc: Build all components for specific platform (use with GOOS and GOARCH vars)
+    deps:
+      - vminsert:build-{{.GOOS}}-{{.GOARCH}}
+      - vmselect:build-{{.GOOS}}-{{.GOARCH}}
+      - vmstorage:build-{{.GOOS}}-{{.GOARCH}}
+
+  # Generate platform-specific build tasks
+  vmcluster-linux-amd64:
+    desc: Build all components for Linux/amd64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: linux, GOARCH: amd64}
+
+  vmcluster-linux-arm64:
+    desc: Build all components for Linux/arm64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: linux, GOARCH: arm64}
+
+  vmcluster-linux-arm:
+    desc: Build all components for Linux/arm
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: linux, GOARCH: arm}
+
+  vmcluster-linux-ppc64le:
+    desc: Build all components for Linux/ppc64le
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: linux, GOARCH: ppc64le}
+
+  vmcluster-linux-386:
+    desc: Build all components for Linux/386
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: linux, GOARCH: 386}
+
+  vmcluster-freebsd-amd64:
+    desc: Build all components for FreeBSD/amd64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: freebsd, GOARCH: amd64}
+
+  vmcluster-openbsd-amd64:
+    desc: Build all components for OpenBSD/amd64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: openbsd, GOARCH: amd64}
+
+  vmcluster-windows-amd64:
+    desc: Build all components for Windows/amd64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: windows, GOARCH: amd64}
+
+  vmcluster-darwin-amd64:
+    desc: Build all components for macOS/amd64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: darwin, GOARCH: amd64}
+
+  vmcluster-darwin-arm64:
+    desc: Build all components for macOS/arm64
+    cmds:
+      - task: vmcluster
+        vars: {GOOS: darwin, GOARCH: arm64}
+
+  # Cross-building tasks
+  crossbuild:
+    desc: Build all components for all supported platforms
+    deps:
+      - vmcluster-crossbuild
+
+  vmcluster-crossbuild:
+    desc: Build VM cluster components for all supported platforms
+    deps:
+      - vmcluster-linux-amd64
+      - vmcluster-linux-arm64
+      - vmcluster-linux-arm
+      - vmcluster-linux-ppc64le
+      - vmcluster-linux-386
+      - vmcluster-freebsd-amd64
+      - vmcluster-openbsd-amd64
+
+  # Release tasks
+  release:
+    desc: Create release packages for all supported platforms
+    deps:
+      - release-vmcluster
+
+  release-vmcluster:
+    desc: Create release packages for VM cluster components
+    deps:
+      - release-vmcluster-linux-amd64
+      - release-vmcluster-linux-arm64
+      - release-vmcluster-freebsd-amd64
+      - release-vmcluster-openbsd-amd64
+      - release-vmcluster-windows-amd64
+      - release-vmcluster-darwin-amd64
+      - release-vmcluster-darwin-arm64
+
+  release-vmcluster-linux-amd64:
+    desc: Package VM cluster components for Linux/amd64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=linux GOARCH=amd64
+
+  release-vmcluster-linux-arm64:
+    desc: Package VM cluster components for Linux/arm64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=linux GOARCH=arm64
+
+  release-vmcluster-freebsd-amd64:
+    desc: Package VM cluster components for FreeBSD/amd64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=freebsd GOARCH=amd64
+
+  release-vmcluster-openbsd-amd64:
+    desc: Package VM cluster components for OpenBSD/amd64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=openbsd GOARCH=amd64
+
+  release-vmcluster-windows-amd64:
+    desc: Package VM cluster components for Windows/amd64
+    cmds:
+      - task release-vmcluster-windows-goarch GOARCH=amd64
+
+  release-vmcluster-darwin-amd64:
+    desc: Package VM cluster components for macOS/amd64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=darwin GOARCH=amd64
+
+  release-vmcluster-darwin-arm64:
+    desc: Package VM cluster components for macOS/arm64
+    cmds:
+      - task release-vmcluster-goos-goarch GOOS=darwin GOARCH=arm64
+
+  release-vmcluster-goos-goarch:
+    desc: Package VM cluster components for specific OS/architecture
+    deps:
+      - vminsert:build-{{.GOOS}}-{{.GOARCH}}-prod
+      - vmselect:build-{{.GOOS}}-{{.GOARCH}}-prod
+      - vmstorage:build-{{.GOOS}}-{{.GOARCH}}-prod
+    cmds:
+      - |
+        cd bin && \
+        tar {{.TAR_OWNERSHIP}} --transform="flags=r;s|-{{.GOOS}}-{{.GOARCH}}||" -czf victoria-metrics-{{.GOOS}}-{{.GOARCH}}-{{.PKG_TAG}}.tar.gz \
+          vminsert-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmselect-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmstorage-{{.GOOS}}-{{.GOARCH}}-prod \
+        && sha256sum victoria-metrics-{{.GOOS}}-{{.GOARCH}}-{{.PKG_TAG}}.tar.gz \
+          vminsert-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmselect-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmstorage-{{.GOOS}}-{{.GOARCH}}-prod \
+          | sed s/-{{.GOOS}}-{{.GOARCH}}-prod/-prod/ > victoria-metrics-{{.GOOS}}-{{.GOARCH}}-{{.PKG_TAG}}_checksums.txt
+      - |
+        cd bin && rm -rf \
+          vminsert-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmselect-{{.GOOS}}-{{.GOARCH}}-prod \
+          vmstorage-{{.GOOS}}-{{.GOARCH}}-prod
+
+  release-vmcluster-windows-goarch:
+    desc: Package VM cluster components for Windows with specified architecture
+    deps:
+      - vminsert:build-windows-{{.GOARCH}}-prod
+      - vmselect:build-windows-{{.GOARCH}}-prod
+      - vmstorage:build-windows-{{.GOARCH}}-prod
+    cmds:
+      - |
+        cd bin && \
+        zip victoria-metrics-windows-{{.GOARCH}}-{{.PKG_TAG}}.zip \
+          vminsert-windows-{{.GOARCH}}-prod.exe \
+          vmselect-windows-{{.GOARCH}}-prod.exe \
+          vmstorage-windows-{{.GOARCH}}-prod.exe \
+        && sha256sum victoria-metrics-windows-{{.GOARCH}}-{{.PKG_TAG}}.zip \
+          vminsert-windows-{{.GOARCH}}-prod.exe \
+          vmselect-windows-{{.GOARCH}}-prod.exe \
+          vmstorage-windows-{{.GOARCH}}-prod.exe \
+          > victoria-metrics-windows-{{.GOARCH}}-{{.PKG_TAG}}_checksums.txt
+      - |
+        cd bin && rm -rf \
+          vminsert-windows-{{.GOARCH}}-prod.exe \
+          vmselect-windows-{{.GOARCH}}-prod.exe \
+          vmstorage-windows-{{.GOARCH}}-prod.exe
+
+  # Development and debugging tasks
+  pprof-cpu:
+    desc: Run pprof on CPU profile data
+    cmds:
+      - go tool pprof -trim_path=github.com/VictoriaMetrics/VictoriaMetrics@ {{.PPROF_FILE}}
+
+  # Code quality tasks
+  fmt:
+    desc: Format Go code
+    cmds:
+      - gofmt -l -w -s ./lib
+      - gofmt -l -w -s ./app
+      - gofmt -l -w -s ./apptest
+
+  vet:
+    desc: Run go vet on all packages
+    cmds:
+      - GOEXPERIMENT=synctest go vet ./lib/...
+      - go vet ./app/...
+      - go vet ./apptest/...
+
+  check-all:
+    desc: Run all code quality checks
+    deps:
+      - fmt
+      - vet
+      - golangci-lint
+      - govulncheck
+
+  clean-checkers:
+    desc: Remove installed code quality tools
+    deps:
+      - remove-golangci-lint
+      - remove-govulncheck
+
+  # Testing tasks
+  test:
+    desc: Run tests for all packages
+    cmds:
+      - GOEXPERIMENT=synctest go test ./lib/... ./app/...
+
+  test-race:
+    desc: Run tests with race detector enabled
+    cmds:
+      - GOEXPERIMENT=synctest go test -race ./lib/... ./app/...
+
+  test-pure:
+    desc: Run tests in pure Go mode (no CGO)
+    cmds:
+      - GOEXPERIMENT=synctest CGO_ENABLED=0 go test ./lib/... ./app/...
+
+  test-full:
+    desc: Run tests with coverage reporting
+    cmds:
+      - GOEXPERIMENT=synctest go test -coverprofile=coverage.txt -covermode=atomic ./lib/... ./app/...
+
+  test-full-386:
+    desc: Run tests with coverage reporting on 386 architecture
+    cmds:
+      - GOEXPERIMENT=synctest GOARCH=386 go test -coverprofile=coverage.txt -covermode=atomic ./lib/... ./app/...
+
+  benchmark:
+    desc: Run benchmarks
+    cmds:
+      - GOEXPERIMENT=synctest go test -bench=. ./lib/...
+      - go test -bench=. ./app/...
+
+  benchmark-pure:
+    desc: Run benchmarks in pure Go mode (no CGO)
+    cmds:
+      - GOEXPERIMENT=synctest CGO_ENABLED=0 go test -bench=. ./lib/...
+      - CGO_ENABLED=0 go test -bench=. ./app/...
+
+  # Dependency management
+  vendor-update:
+    desc: Update all dependencies
+    cmds:
+      - go get -u ./lib/...
+      - go get -u ./app/...
+      - go mod tidy -compat=1.24
+      - go mod vendor
+
+  # Template generation
+  quicktemplate-gen:
+    desc: Generate QuickTemplate code
+    deps:
+      - install-qtc
+    cmds:
+      - qtc
+
+  # Tool installation
+  install-qtc:
+    desc: Install QuickTemplate compiler
+    cmds:
+      - which qtc || go install github.com/valyala/quicktemplate/qtc@latest
+
+  golangci-lint:
+    desc: Run golangci-lint
+    deps:
+      - install-golangci-lint
+    cmds:
+      - GOEXPERIMENT=synctest golangci-lint run
+
+  install-golangci-lint:
+    desc: Install golangci-lint
+    cmds:
+      - which golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.64.7
+
+  remove-golangci-lint:
+    desc: Remove golangci-lint
+    cmds:
+      - rm -rf `which golangci-lint`
+
+  govulncheck:
+    desc: Run vulnerability scanner
+    deps:
+      - install-govulncheck
+    cmds:
+      - govulncheck ./...
+
+  install-govulncheck:
+    desc: Install vulnerability scanner
+    cmds:
+      - which govulncheck || go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  remove-govulncheck:
+    desc: Remove vulnerability scanner
+    cmds:
+      - rm -rf `which govulncheck`
+
+  install-wwhrd:
+    desc: Install license checker
+    cmds:
+      - which wwhrd || go install github.com/frapposelli/wwhrd@latest
+
+  check-licenses:
+    desc: Check licenses of dependencies
+    deps:
+      - install-wwhrd
+    cmds:
+      - wwhrd check -f .wwhrd.yml 
