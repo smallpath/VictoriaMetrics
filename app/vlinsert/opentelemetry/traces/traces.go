@@ -25,6 +25,10 @@ var (
 	requestProtobufDuration = metrics.NewHistogram(`vl_http_request_duration_seconds{path="/insert/opentelemetry/v1/traces",format="protobuf"}`)
 )
 
+var (
+	defaultStreamFields = []string{ResourceAttrPrefix + "service.name", Name}
+)
+
 func HandleProtobuf(r *http.Request, w http.ResponseWriter) {
 	startTime := time.Now()
 	requestsProtobufTotal.Inc()
@@ -34,6 +38,10 @@ func HandleProtobuf(r *http.Request, w http.ResponseWriter) {
 		httpserver.Errorf(w, r, "cannot parse common params from request: %s", err)
 		return
 	}
+	if len(cp.StreamFields) == 0 {
+		cp.StreamFields = defaultStreamFields
+	}
+
 	if err := vlstorage.CanWriteData(); err != nil {
 		httpserver.Errorf(w, r, "%s", err)
 		return
@@ -41,8 +49,7 @@ func HandleProtobuf(r *http.Request, w http.ResponseWriter) {
 
 	encoding := r.Header.Get("Content-Encoding")
 	err = protoparserutil.ReadUncompressedData(r.Body, encoding, maxRequestSize, func(data []byte) error {
-		lmp := cp.NewLogMessageProcessor("opentelelemtry_protobuf", false)
-		useDefaultStreamFields := len(cp.StreamFields) == 0
+		lmp := cp.NewLogMessageProcessor("opentelelemtry_traces_protobuf", false)
 		err := pushProtobufRequest(data, lmp, useDefaultStreamFields)
 		lmp.MustClose()
 		return err
@@ -58,7 +65,7 @@ func HandleProtobuf(r *http.Request, w http.ResponseWriter) {
 	requestProtobufDuration.UpdateDuration(startTime)
 }
 
-func pushProtobufRequest(data []byte, lmp insertutil.LogMessageProcessor, useDefaultStreamFields bool) error {
+func pushProtobufRequest(data []byte, lmp insertutil.LogMessageProcessor) error {
 	var req pb.ExportTraceServiceRequest
 	if err := req.UnmarshalProtobuf(data); err != nil {
 		errorsTotal.Inc()
@@ -75,13 +82,13 @@ func pushProtobufRequest(data []byte, lmp insertutil.LogMessageProcessor, useDef
 		}
 		commonFieldsLen := len(commonFields)
 		for _, ss := range rs.ScopeSpans {
-			commonFields = pushFieldsFromScopeSpans(ss, commonFields[:commonFieldsLen], lmp, useDefaultStreamFields)
+			commonFields = pushFieldsFromScopeSpans(ss, commonFields[:commonFieldsLen], lmp)
 		}
 	}
 	return nil
 }
 
-func pushFieldsFromScopeSpans(ss *pb.ScopeSpans, commonFields []logstorage.Field, lmp insertutil.LogMessageProcessor, useDefaultStreamFields bool) []logstorage.Field {
+func pushFieldsFromScopeSpans(ss *pb.ScopeSpans, commonFields []logstorage.Field, lmp insertutil.LogMessageProcessor) []logstorage.Field {
 	commonFields = append(commonFields, logstorage.Field{
 		Name:  InstrumentationScopeName,
 		Value: ss.Scope.Name,
@@ -97,12 +104,12 @@ func pushFieldsFromScopeSpans(ss *pb.ScopeSpans, commonFields []logstorage.Field
 	}
 	commonFieldsLen := len(commonFields)
 	for _, span := range ss.Spans {
-		commonFields = pushFieldsFromSpan(span, commonFields[:commonFieldsLen], lmp, useDefaultStreamFields)
+		commonFields = pushFieldsFromSpan(span, commonFields[:commonFieldsLen], lmp)
 	}
 	return commonFields
 }
 
-func pushFieldsFromSpan(span *pb.Span, scopeCommonFields []logstorage.Field, lmp insertutil.LogMessageProcessor, useDefaultStreamFields bool) []logstorage.Field {
+func pushFieldsFromSpan(span *pb.Span, scopeCommonFields []logstorage.Field, lmp insertutil.LogMessageProcessor) []logstorage.Field {
 	fields := scopeCommonFields
 	fields = append(fields,
 		logstorage.Field{Name: TraceId, Value: span.TraceId},
@@ -158,10 +165,6 @@ func pushFieldsFromSpan(span *pb.Span, scopeCommonFields []logstorage.Field, lmp
 			})
 		}
 	}
-	var streamFields []logstorage.Field
-	if useDefaultStreamFields {
-		streamFields = scopeCommonFields
-	}
-	lmp.AddRow(int64(span.EndTimeUnixNano), fields, streamFields)
+	lmp.AddRow(int64(span.EndTimeUnixNano), fields, nil)
 	return fields
 }
