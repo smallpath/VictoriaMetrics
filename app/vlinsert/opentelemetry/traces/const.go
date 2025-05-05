@@ -7,8 +7,8 @@ const (
 
 // ScopeSpans - InstrumentationScope
 const (
-	InstrumentationScopeName       = ""
-	InstrumentationScopeVersion    = ""
+	InstrumentationScopeName       = "scope_name"
+	InstrumentationScopeVersion    = "scope_version"
 	instrumentationScopeAttrPrefix = "scope_attr:"
 )
 
