@@ -125,6 +125,9 @@ func pushFieldsFromSpan(span *pb.Span, scopeCommonFields []logstorage.Field, lmp
 		logstorage.Field{Name: DroppedAttributesCount, Value: strconv.FormatUint(uint64(span.DroppedAttributesCount), 10)},
 		logstorage.Field{Name: DroppedEventsCount, Value: strconv.FormatUint(uint64(span.DroppedEventsCount), 10)},
 		logstorage.Field{Name: DroppedLinksCount, Value: strconv.FormatUint(uint64(span.DroppedLinksCount), 10)},
+
+		logstorage.Field{Name: StatusMessage, Value: span.Status.Message},
+		logstorage.Field{Name: StatusCode, Value: strconv.FormatInt(int64(span.Status.Code), 10)},
 	)
 
 	for _, attr := range span.Attributes {
