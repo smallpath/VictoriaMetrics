@@ -1,258 +1,126 @@
-VictoriaLogs is an
-[open source](https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/victoria-logs),
-extremely fast and cost-effective database for logs from
-[VictoriaMetrics](https://github.com/VictoriaMetrics/VictoriaMetrics/).
+VictoriaLogs is an [open source](https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/victoria-logs), extremely fast, and cost-effective database for logs from [VictoriaMetrics](https://github.com/VictoriaMetrics/VictoriaMetrics/).
 
 VictoriaLogs provides some key advantages over other solutions:
 
-- **Resource efficient**: 30x less RAM and up to 15x less disk space than other
-  solutions such as Elasticsearch and Grafana Loki. See
-  [benchmarks](#benchmarks) and
-  [How do open source solutions for logs work?](https://itnext.io/how-do-open-source-solutions-for-logs-work-elasticsearch-loki-and-victorialogs-9f7097ecbc2f)
-  for details.
-- **High scalability**: Performance and available resources (CPU, RAM, disk IO,
-  disk space) scales linearly. It can also scale horizontally to many nodes in
-  [cluster mode](https://docs.victoriametrics.com/victorialogs/cluster/). It
-  runs smoothly on Raspberry PI and on servers with hundreds of CPU cores and
-  terabytes of RAM.
-- **Broad compatibility**: Ingests logs from widely used collectors like
-  Promtail, Fluentd, Fluent Bit, Vector, Logstash, OpenTelemetry Collector,...
-  See
-  [Data Ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/).
-- **Zero-config simplicity**: Very simple to install and use — no complex
-  configuration needed. Much easier than Elasticsearch or Grafana Loki. See
-  [Quick Start](https://docs.victoriametrics.com/victorialogs/quickstart/).
-- **Powerful query language**: provides its own
-  [LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/) query
-  language, with full-text search and support for all
-  [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
-- **Web UI**: It provides
-  [built-in web UI](https://docs.victoriametrics.com/victorialogs/querying/#web-ui)
-  for logs' exploration and troubleshooting.
-- **Grafana integration**: Provides
-  [Grafana plugin](https://docs.victoriametrics.com/victorialogs/victorialogs-datasource/)
-  for building arbitrary dashboards in Grafana.
-- **Command-line tool**: Provides
-  [vlogscli](https://docs.victoriametrics.com/victorialogs/querying/vlogscli/),
-  an interactive CLI for querying VictoriaLogs. It also works well with classic
-  Unix tools like `grep`, `less`, `sort`, `jq`, etc. See
-  [CLI docs](https://docs.victoriametrics.com/victorialogs/querying/#command-line)
-  and
-  [vlogscli docs](https://docs.victoriametrics.com/victorialogs/querying/vlogscli/)
-  for details.
-- **High-cardinality fields**: Supports
-  [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model)
-  with many unique values (high cardinality) such as `trace_id`, `user_id`
-  and `ip`.
-  [`wide events`](https://jeremymorrell.dev/blog/a-practitioners-guide-to-wide-events/)).
+- **Resource efficient**: Uses 30x less RAM and up to 15x less disk space than other solutions such as Elasticsearch and Grafana Loki. See [benchmarks](#benchmarks) and [How do open source solutions for logs work?](https://itnext.io/how-do-open-source-solutions-for-logs-work-elasticsearch-loki-and-victorialogs-9f7097ecbc2f) for details.
+- **High scalability**: Performance and available resources (CPU, RAM, disk I/O, disk space) scale linearly. It can also scale horizontally to many nodes in [cluster mode](https://docs.victoriametrics.com/victorialogs/cluster/). It runs smoothly on Raspberry Pi and on servers with hundreds of CPU cores and terabytes of RAM.
+- **Broad compatibility**: Ingests logs from widely used collectors like Promtail, Fluentd, Fluent Bit, Vector, Logstash, OpenTelemetry Collector, etc. See [Data Ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/).
+- **Zero-config simplicity**: Very simple to install and use — no complex configuration needed. Much easier than Elasticsearch or Grafana Loki. See [Quick Start](https://docs.victoriametrics.com/victorialogs/quickstart/).
+- **Powerful query language**: Provides its own [LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/) query language, with full-text search and support for all [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model).
+- **Web UI**: Offers a [built-in web UI](https://docs.victoriametrics.com/victorialogs/querying/#web-ui) for log exploration and troubleshooting.
+- **Grafana integration**: Provides a [Grafana plugin](https://docs.victoriametrics.com/victorialogs/victorialogs-datasource/) for building arbitrary dashboards in Grafana.
+- **Command-line tool**: Includes [vlogscli](https://docs.victoriametrics.com/victorialogs/querying/vlogscli/), an interactive CLI for querying VictoriaLogs. It also works well with classic Unix tools like `grep`, `less`, `sort`, `jq`, etc. See [CLI docs](https://docs.victoriametrics.com/victorialogs/querying/#command-line) for details.
+- **High-cardinality fields**: Supports [log fields](https://docs.victoriametrics.com/victorialogs/keyconcepts/#data-model) with many unique values (high cardinality) such as `trace_id`, `user_id`, and `ip`.
 - **Multitenancy**: Supports [multiple tenants](#multitenancy) with isolated data streams.
-- **Backfilling**: Accept and store log data with timestamps from the past or future (only 2 days ahead by default), regardless of the order in which they are received.
-- **Live tailing**: Allows viewing logs in real time as they are ingested. See
-  [Live Tailing](https://docs.victoriametrics.com/victorialogs/querying/#live-tailing).
+- **Backfilling**: Accepts and stores log data with timestamps from the past or future (only 2 days ahead by default), regardless of the order in which they are received.
+- **Live tailing**: Allows viewing logs in real-time as they are ingested. See [Live Tailing](https://docs.victoriametrics.com/victorialogs/querying/#live-tailing).
 - **Contextual log selection**: Enables fetching logs before and after a specific log line. See [stream_context Pipe](https://docs.victoriametrics.com/victorialogs/logsql/#stream_context-pipe).
 - **Alerting**: Can trigger alerts based on log queries. See [Alerting](https://docs.victoriametrics.com/victorialogs/vmalert/).
 - **Wide events support**: Optimized for logs with hundreds of fields ([wide events](https://jeremymorrell.dev/blog/a-practitioners-guide-to-wide-events/)).
 
-If you have questions about VictoriaLogs, then read
-[this FAQ](https://docs.victoriametrics.com/victorialogs/faq/). Also feel free
-asking any questions at
-[VictoriaMetrics community Slack chat](https://victoriametrics.slack.com/), you
-can join it via [Slack Inviter](https://slack.victoriametrics.com/).
+To get started with VictoriaLogs, follow the [Quick Start guide](https://docs.victoriametrics.com/victorialogs/quickstart/) and read this [FAQ](https://docs.victoriametrics.com/victorialogs/faq/) for any questions. You can also try VictoriaLogs right away in the [Playground](https://play-vmlogs.victoriametrics.com/) with [LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/).
 
-See
-[quick start docs](https://docs.victoriametrics.com/victorialogs/quickstart/)
-for start working with VictoriaLogs.
-
-If you want playing with VictoriaLogs web UI and
-[LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/) query language,
-then go to
-[VictoriaLogs demo playground](https://play-vmlogs.victoriametrics.com/).
+Feel free to ask any questions at [VictoriaMetrics Community Slack](https://victoriametrics.slack.com/), or join via the [Slack Inviter](https://slack.victoriametrics.com/).
 
 ## Tuning
 
-- No need in tuning for VictoriaLogs - it uses reasonable defaults for
-  command-line flags, which are automatically adjusted for the available CPU and
-  RAM resources.
-- No need in tuning for Operating System - VictoriaLogs is optimized for default
-  OS settings. The only option is increasing the limit on
-  [the number of open files in the OS](https://medium.com/@muhammadtriwibowo/set-permanently-ulimit-n-open-files-in-ubuntu-4d61064429a).
-- The recommended filesystem is `ext4`, the recommended persistent storage is
-  [persistent HDD-based disk on GCP](https://cloud.google.com/compute/docs/disks/#pdspecs),
-  since it is protected from hardware failures via internal replication and it
-  can be
-  [resized on the fly](https://cloud.google.com/compute/docs/disks/add-persistent-disk#resize_pd).
-  If you plan to store more than 1TB of data on `ext4` partition or plan
-  extending it to more than 16TB, then the following options are recommended to
-  pass to `mkfs.ext4`:
+VictoriaLogs already uses reasonable settings by default for command-line flags, which are automatically adjusted and scaled with the available CPU and RAM resources.
 
+It also uses reasonable settings for the OS. The only option is increasing the limit on [the number of open files in the OS](https://medium.com/@muhammadtriwibowo/set-permanently-ulimit-n-open-files-in-ubuntu-4d61064429a).
+
+We recommend the following:
+
+- Use `ext4` as the filesystem. The recommended persistent storage is [persistent HDD-based disk on GCP](https://cloud.google.com/compute/docs/disks/#pdspecs), since it is protected from hardware failures via internal replication and it can be [resized on the fly](https://cloud.google.com/compute/docs/disks/add-persistent-disk#resize_pd).
+- If you plan to store more than 1TB of data on `ext4` partition or plan extending it to more than 16TB, then the following options are recommended to pass to `mkfs.ext4`:
   ```sh
   mkfs.ext4 ... -O 64bit,huge_file,extent -T huge
   ```
 
 ## Monitoring
 
-VictoriaLogs exposes internal metrics in Prometheus exposition format at
-`http://localhost:9428/metrics` page. It is recommended to set up monitoring of
-these metrics via VictoriaMetrics (see
-[these docs](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#how-to-scrape-prometheus-exporters-such-as-node-exporter)),
-vmagent (see
-[these docs](https://docs.victoriametrics.com/victoriametrics/vmagent/#how-to-collect-metrics-in-prometheus-format))
-or via Prometheus.
+VictoriaLogs integrates well with observability tools:
 
-We recommend installing Grafana dashboard for
-[VictoriaLogs single-node](https://grafana.com/grafana/dashboards/22084) or
-[cluster](https://grafana.com/grafana/dashboards/23274).
-
-We recommend setting up
-[alerts](https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/deployment/docker/rules/alerts-vlogs.yml)
-via [vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/) or via
-Prometheus.
-
-VictoriaLogs emits its own logs to stdout. It is recommended to investigate
-these logs during troubleshooting.
+- **Metrics**: Exposes internal metrics in Prometheus exposition format at `http://localhost:9428/metrics`. It is recommended to monitor these metrics using [VictoriaMetrics](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#how-to-scrape-prometheus-exporters-such-as-node-exporter), [vmagent](https://docs.victoriametrics.com/victoriametrics/vmagent/#how-to-collect-metrics-in-prometheus-format), or Prometheus.
+- **Grafana Dashboards**: Official Grafana dashboards are available for [VictoriaLogs single-node](https://grafana.com/grafana/dashboards/22084) and [VictoriaLogs cluster](https://grafana.com/grafana/dashboards/23274) setups, maintained by the VictoriaMetrics team.
+- **Alerts**: Set up [alerts](https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/deployment/docker/rules/alerts-vlogs.yml) using [vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/) or Prometheus.
+- **Logs**: VictoriaLogs writes its own logs to stdout.
 
 ## Upgrading
 
-It is safe upgrading VictoriaLogs to new versions unless
-[release notes](https://docs.victoriametrics.com/victorialogs/changelog/) say
-otherwise. It is safe to skip multiple versions during the upgrade unless
-[release notes](https://docs.victoriametrics.com/victorialogs/changelog/) say
-otherwise. It is recommended to perform regular upgrades to the latest version,
-since it may contain important bug fixes, performance optimizations or new
-features.
+It is generally safe to upgrade, downgrade, or skip versions. However, always review the [release notes](https://docs.victoriametrics.com/victorialogs/changelog/) for any breaking changes or important updates before proceeding.
 
-It is also safe to downgrade to older versions unless
-[release notes](https://docs.victoriametrics.com/victorialogs/changelog/) say
-otherwise.
+We suggest enabling notifications for new releases. This helps you stay informed about changelogs and benefit from performance improvements, bug fixes, and new features.
 
-The following steps must be performed during the upgrade / downgrade procedure:
+Follow these steps when upgrading/downgrading:
 
-- Send `SIGINT` signal to VictoriaLogs process in order to gracefully stop it.
-  See
-  [how to send signals to processes](https://stackoverflow.com/questions/33239959/send-signal-to-process-from-command-line).
-- Wait until the process stops. This can take a few seconds.
-- Start the upgraded VictoriaLogs.
+- Send a `SIGINT` signal to the VictoriaLogs process to shut it down gracefully. See [how to send signals to processes](https://stackoverflow.com/questions/33239959/send-signal-to-process-from-command-line) for guidance.
+- Wait for the process to stop. This may take a few seconds.
+- Start the new version of VictoriaLogs.
 
 ## Retention
 
-By default, VictoriaLogs stores log entries with timestamps in the time range
-`[now-7d, now]`, while dropping logs outside the given time range. E.g. it uses
-the retention of 7 days. The retention can be configured with `-retentionPeriod`
-command-line flag. This flag accepts values starting from `1d` (one day) up to
-`100y` (100 years). See
-[these docs](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations)
-for the supported duration formats.
+By default, VictoriaLogs stores log entries with timestamps from the past 7 days. Logs outside this range are dropped. You can change the retention period using the `-retentionPeriod` command-line flag. This flag accepts values from `1d` (1 day) up to `100y` (100 years). See the [Time Durations](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations) guide for supported formats.
 
-For example, the following command starts VictoriaLogs with the retention of 8
-weeks:
+For example, to set the retention period to 8 weeks:
 
 ```sh
 /path/to/victoria-logs -retentionPeriod=8w
 ```
 
-See also [retention by disk space usage](#retention-by-disk-space-usage).
+See also [Retention by disk space usage](#retention-by-disk-space-usage).
 
-VictoriaLogs stores the
-[ingested](https://docs.victoriametrics.com/victorialogs/data-ingestion/) logs
-in per-day partition directories. It automatically drops partition directories
-outside the configured retention.
+VictoriaLogs automatically drops logs with timestamps outside the configured retention period. This includes logs stored on disk and logs recently received.
 
-VictoriaLogs automatically drops logs at
-[data ingestion](https://docs.victoriametrics.com/victorialogs/data-ingestion/)
-stage if they have timestamps outside the configured retention. A sample of
-dropped logs is logged with `WARN` message in order to simplify troubleshooting.
-The `vl_rows_dropped_total` [metric](#monitoring) is incremented each time an
-ingested log entry is dropped because of timestamp outside the retention. It is
-recommended to set up the following alerting rule at
-[vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/) in order to
-be notified when logs with wrong timestamps are ingested into VictoriaLogs:
+If logs are being dropped during ingestion, there are several ways to troubleshoot:
 
-```metricsql
-rate(vl_rows_dropped_total[5m]) > 0
+- A sample of dropped logs is logged with a `WARN` message to assist with debugging.
+- The `vl_rows_dropped_total` [metric](#monitoring) is increased each time a log is dropped due to an invalid timestamp.
+- It is recommended to set up an alerting rule with [vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/) to be notified when logs with incorrect timestamps are ingested:
+
+```yaml
+- alert: RowsRejectedOnIngestion
+  expr: rate(vl_rows_dropped_total[5m]) > 0
 ```
 
-By default, VictoriaLogs doesn't accept log entries with timestamps bigger than
-`now+2d`, e.g. 2 days in the future. If you need accepting logs with bigger
-timestamps, then specify the desired "future retention" via `-futureRetention`
-command-line flag. This flag accepts values starting from `1d`. See
-[these docs](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations)
-for the supported duration formats.
+By default, VictoriaLogs does not accept log entries with timestamps more than 2 days in the future (`now+2d`). You can customize this limit using the `-futureRetention` flag. The minimum allowed value is `1d`.
 
-For example, the following command starts VictoriaLogs, which accepts logs with
-timestamps up to a year in the future:
+## Retention by Disk Space Usage
 
-```sh
-/path/to/victoria-logs -futureRetention=1y
-```
+VictoriaLogs stores log data in per-day partitions (see [Storage](#storage)).
 
-## Retention by disk space usage
+To automatically remove old per-day partitions based on disk space usage, use the `-retention.maxDiskSpaceUsageBytes` flag. When the total size of data in the [`-storageDataPath` directory](#storage) exceeds this limit, VictoriaLogs deletes the oldest partitions to free up space.
 
-VictoriaLogs can be configured to automatically drop older per-day partitions if
-the total size of data at [`-storageDataPath` directory](#storage) becomes
-bigger than the given threshold at `-retention.maxDiskSpaceUsageBytes`
-command-line flag. For example, the following command starts VictoriaLogs, which
-drops old per-day partitions if the total [storage](#storage) size becomes
-bigger than `100GiB`:
+For example, to set a storage limit of 100 GiB:
 
 ```sh
 /path/to/victoria-logs -retention.maxDiskSpaceUsageBytes=100GiB
 ```
 
-VictoriaLogs usually compresses logs by 10x or more times. This means that
-VictoriaLogs can store more than a terabyte of uncompressed logs when it runs
-with `-retention.maxDiskSpaceUsageBytes=100GiB`.
+VictoriaLogs typically compresses logs by 10 times or more. This means it can store over a terabyte of raw log data with a 100 GiB disk limit.
 
-VictoriaLogs keeps at least two last days of data in order to guarantee that the
-logs for the last day can be returned in queries. This means that the total disk
-space usage may exceed the `-retention.maxDiskSpaceUsageBytes` if the size of
-the last two days of data exceeds the `-retention.maxDiskSpaceUsageBytes`.
+There is one exception. VictoriaLogs always keeps at least the last two days of data to ensure queries for recent logs work correctly. If the last two days of data are larger than the limit, the total disk usage may go over `-retention.maxDiskSpaceUsageBytes`.
 
-The [`-retentionPeriod`](#retention) is applied independently to the
-`-retention.maxDiskSpaceUsageBytes`. This means that VictoriaLogs automatically
-drops logs older than 7 days by default if only
-`-retention.maxDiskSpaceUsageBytes` command-line flag is set. Set the
-`-retentionPeriod` to some big value (e.g. `100y` - 100 years) if logs shouldn't
-be dropped because of some small `-retentionPeriod`. For example:
+Note that the time-based retention (`-retentionPeriod`) and disk-based retention (`-retention.maxDiskSpaceUsageBytes`) work independently.
+
+For example:
 
 ```sh
-/path/to/victoria-logs -retention.maxDiskSpaceUsageBytes=10TiB -retentionPeriod=100y
+/path/to/victoria-logs -retentionPeriod=2d -retention.maxDiskSpaceUsageBytes=100GiB 
 ```
+
+In this case, VictoriaLogs keeps at least the last two days of data and removes older partitions if total storage usage goes over 100 GiB.
 
 ## Storage
 
-By default VictoriaLogs stores all its data in a single directory -
-`victoria-logs-data`. The path to the directory can be changed via
-`-storageDataPath` command-line flag. For example, the following command starts
-VictoriaLogs, which stores the data at `/var/lib/victoria-logs`:
+By default, VictoriaLogs stores all data in a directory named `/victoria-logs-data`. You can change this location using the `-storageDataPath` flag:
 
 ```sh
 /path/to/victoria-logs -storageDataPath=/var/lib/victoria-logs
 ```
 
-VictoriaLogs automatically creates the `-storageDataPath` directory on the first
-run if it is missing.
+This `-storageDataPath` directory is created automatically on the first run if it does not exist.
 
-The ingested logs are stored in per-day subdirectories (partitions) at the
-`<-storageDataPath>/partitions` directory. The per-day subdirectories have
-`YYYYMMDD` names. For example, the directory with the name `20250418` contains
-logs with
-[`_time` field](https://docs.victoriametrics.com/victorialogs/keyconcepts/#time-field)
-values at April 18, 2025 UTC. This allows flexible data management. For example,
-old per-day data is automatically and quickly deleted according to the provided
-[retention policy](#retention) by removing the corresponding per-day
-subdirectory (partition).
-
-VictoriaLogs switches to cluster mode if `-storageNode` command-line flag is
-specified:
-
-- It stops storing the ingested logs locally in cluster mode. It spreads them
-  evenly among `vlstorage` nodes specified via the `-storageNode` command-line
-  flag.
-- It stops querying the locally stored logs in cluster mode. It queries
-  `vlstorage` nodes specified via `-storageNode` command-line flag.
-
-See [cluster mode docs](https://docs.victoriametrics.com/victorialogs/cluster/)
-for details.
+Logs are stored in **daily subdirectories** inside the `<-storageDataPath>/partitions` directory. Each subdirectory is named using the `YYYYMMDD` format. For example, the `<-storageDataPath>/partitions/20250418` directory contains logs with `_time` field values from April 18, 2025 (UTC). See the [Time Field](https://docs.victoriametrics.com/victorialogs/keyconcepts/#time-field) documentation for more details.
 
 ## Forced merge
 
