@@ -1,1 +1,47 @@
-package jaeger
+{% import (
+	"sort"
+) %}
+
+{% stripspace %}
+
+{% func GetServicesResponse(serviceList []string) %}
+{
+	{% code
+	    sort.Slice(serviceList, func(i, j int) bool { return serviceList[i] < serviceList[j] })
+	%}
+	"data":[
+        {% if len(serviceList) > 0 %}
+            {%s= serviceList[0] %}
+            {% for _, service := range serviceList[1:] %}
+                ,{%s= service %}
+            {% endfor %}
+        {% endif %}
+	],
+	"errors": null,
+	"limit": 0,
+	"offset": 0,
+	"total": {%d= len(serviceList) %},
+}
+{% endfunc %}
+
+{% func GetOperationsResponse(operationList []string) %}
+{
+	{% code
+	    sort.Slice(operationList, func(i, j int) bool { return operationList[i] < operationList[j] })
+	%}
+	"data":[
+        {% if len(operationList) > 0 %}
+            {%s= operationList[0] %}
+            {% for _, operation := range operationList[1:] %}
+                ,{%s= operation %}
+            {% endfor %}
+        {% endif %}
+	],
+	"errors": null,
+	"limit": 0,
+	"offset": 0,
+	"total": {%d= len(operationList) %},
+}
+{% endfunc %}
+
+{% endstripspace %}

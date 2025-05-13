@@ -121,6 +121,7 @@ func pushFieldsFromSpan(span *pb.Span, scopeCommonFields []logstorage.Field, lmp
 		logstorage.Field{Name: Kind, Value: strconv.FormatInt(int64(span.Kind), 10)},
 		logstorage.Field{Name: StartTimeUnixNano, Value: strconv.FormatUint(span.StartTimeUnixNano, 10)},
 		logstorage.Field{Name: EndTimeUnixNano, Value: strconv.FormatUint(span.EndTimeUnixNano, 10)},
+		logstorage.Field{Name: Duration, Value: strconv.FormatUint(span.EndTimeUnixNano-span.StartTimeUnixNano, 10)},
 
 		logstorage.Field{Name: DroppedAttributesCount, Value: strconv.FormatUint(uint64(span.DroppedAttributesCount), 10)},
 		logstorage.Field{Name: DroppedEventsCount, Value: strconv.FormatUint(uint64(span.DroppedEventsCount), 10)},

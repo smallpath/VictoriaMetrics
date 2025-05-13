@@ -1,4 +1,4 @@
-package traces
+package jaeger
 
 // Resource
 const (

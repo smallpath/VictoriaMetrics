@@ -4,16 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlstorage"
-	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlstorage/netselect"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/atomicutil"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/encoding"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/encoding/zstd"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logstorage"
 	"github.com/VictoriaMetrics/metrics"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,12 +38,12 @@ func RequestHandler(ctx context.Context, w http.ResponseWriter, r *http.Request)
 	path := r.URL.Path
 	if path == "/api/services" {
 		jaegerServicesRequests.Inc()
-		processQueryRequest()
+		processGetServicesRequest(ctx, w, r)
 		jaegerServicesDuration.UpdateDuration(startTime)
 		return true
 	} else if strings.HasPrefix(path, "/api/services/") && strings.HasSuffix(path, "/operations") {
 		jaegerOperationsRequests.Inc()
-		//logsql.ProcessFieldNamesRequest(ctx, w, r)
+		processGetOperationsRequest(ctx, w, r)
 		jaegerOperationsDuration.UpdateDuration(startTime)
 		return true
 	} else if path == "/api/traces" {
@@ -70,86 +65,262 @@ func RequestHandler(ctx context.Context, w http.ResponseWriter, r *http.Request)
 	return false
 }
 
-func processGetServicesRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func processGetServicesRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	cp, err := getCommonParams(r)
 	if err != nil {
-		return err
+		httpserver.Errorf(w, r, "incorrect query params: %s", err)
+		return
+	}
+
+	qStr := "*"
+	q, err := logstorage.ParseQueryAtTimestamp(qStr, time.Now().UnixNano())
+	if err != nil {
+		httpserver.Errorf(w, r, "cannot parse query [%s]: %s", qStr, err)
+		return
+	}
+	q.AddTimeFilter(0, time.Now().UnixNano())
+	logger.Infof("GetServices StreamFieldValues query: %s", q.String())
+	serviceHits, err := vlstorage.GetStreamFieldValues(ctx, cp.TenantIDs, q, ResourceAttrPrefix+"service.name", uint64(1000))
+	if err != nil {
+		httpserver.Errorf(w, r, "cannot parse query [%s]: %s", qStr, err)
+		return
+	}
+
+	serviceList := make([]string, 0, len(serviceHits))
+	for i := range serviceHits {
+		serviceList = append(serviceList, serviceHits[i].Value)
+	}
+	// Write results
+	w.Header().Set("Content-Type", "application/json")
+	WriteGetServicesResponse(w, serviceList)
+	return
+}
+
+func processGetOperationsRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	cp, err := getCommonParams(r)
+	if err != nil {
+		httpserver.Errorf(w, r, "incorrect query params: %s", err)
+		return
+	}
+
+	paths := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	if len(paths) < 4 {
+		httpserver.Errorf(w, r, "incorrect query path [%s]", r.URL.Path)
+		return
+	}
+	serviceName := paths[len(paths)-2]
+
+	qStr := fmt.Sprintf("_stream:{%s=\"%s\"}", ResourceAttrPrefix+"service.name", serviceName) // todo spankind filter
+	q, err := logstorage.ParseQueryAtTimestamp(qStr, time.Now().UnixNano())
+	if err != nil {
+		httpserver.Errorf(w, r, "cannot parse query [%s]: %s", qStr, err)
+		return
+	}
+	logger.Infof("GetOperations StreamFieldValues query: %s", q.String())
+	operationHits, err := vlstorage.GetStreamFieldValues(ctx, cp.TenantIDs, q, Name, uint64(1000))
+	if err != nil {
+		httpserver.Errorf(w, r, "get operation hits error: %s", err)
+		return
+	}
+
+	operationList := make([]string, 0, len(operationHits))
+	for i := range operationHits {
+		operationList = append(operationList, operationHits[i].Value)
 	}
 
 	// Write results
 	w.Header().Set("Content-Type", "application/json")
-	WriteValuesWithHitsJSON(w, fieldNames)
+	WriteGetOperationsResponse(w, operationList)
+	return
+}
 
-	sendBuf := func(bb *bytesutil.ByteBuffer) error {
-		if len(bb.B) == 0 {
-			return nil
-		}
+// traceQueryParameters defines the parameters for querying a batch of traces from the query service.
+type traceQueryParameters struct {
+	ServiceName   string
+	OperationName string
+	Tags          map[string]string
+	StartTimeMin  time.Time
+	StartTimeMax  time.Time
+	DurationMin   time.Duration
+	DurationMax   time.Duration
+	NumTraces     int
+	RawTraces     bool
+}
 
-		data := bb.B
-		if !cp.DisableCompression {
-			bufLen := len(bb.B)
-			bb.B = zstd.CompressLevel(bb.B, bb.B, 1)
-			data = bb.B[bufLen:]
-		}
+type row struct {
+	timestamp int64
+	fields    []logstorage.Field
+}
 
-		wLock.Lock()
-		dataLenBuf = encoding.MarshalUint64(dataLenBuf[:0], uint64(len(data)))
-		_, err := w.Write(dataLenBuf)
-		if err == nil {
-			_, err = w.Write(data)
-		}
-		wLock.Unlock()
+func parseTraceQueryParams(ctx context.Context, r *http.Request) (*traceQueryParameters, error) {
+	return nil, nil
+}
 
-		// Reset the sent buf
-		bb.Reset()
+func processGetTracesRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		logger.Infof("FindTraces finished in %dms", time.Since(start).Milliseconds())
+	}()
 
-		return err
+	cp, err := getCommonParams(r)
+	if err != nil {
+		httpserver.Errorf(w, r, "incorrect query params: %s", err)
+		return
 	}
 
-	var bufs atomicutil.Slice[bytesutil.ByteBuffer]
+	query, err := parseTraceQueryParams(ctx, r)
+	if err != nil {
+		httpserver.Errorf(w, r, "incorrect trace query params: %s", err)
+	}
 
-	var errGlobalLock sync.Mutex
-	var errGlobal error
+	traceIDs, err := processGetTraceIDsRequest(ctx, cp, query)
+	if err != nil {
+		httpserver.Errorf(w, r, "get trace id error: %w", err)
+		return
+	}
+	if len(traceIDs) == 0 {
+		// Write results
+		w.Header().Set("Content-Type", "application/json")
+		WriteGetOperationsResponse(w, traceIDs)
+		return
+	}
 
-	writeBlock := func(workerID uint, db *logstorage.DataBlock) {
-		if errGlobal != nil {
-			return
+	qStr := fmt.Sprintf(TraceId+":in(%s)", strings.Join(traceIDs, ","))
+	q, err := logstorage.ParseQueryAtTimestamp(qStr, time.Now().UnixNano())
+	if err != nil {
+		httpserver.Errorf(w, r, "cannot parse query [%s]: %s", qStr, err)
+		return
+	}
+	q.AddTimeFilter(query.StartTimeMin.UnixNano(), query.StartTimeMax.UnixNano())
+
+	var rows []row
+	var rowsLock sync.Mutex
+	writeBlock := func(_ uint, timestamps []int64, columns []logstorage.BlockColumn) {
+		clonedColumnNames := make([]string, len(columns))
+		for i, c := range columns {
+			clonedColumnNames[i] = strings.Clone(c.Name)
 		}
 
-		bb := bufs.Get(workerID)
-
-		bb.B = db.Marshal(bb.B)
-
-		if len(bb.B) < 1024*1024 {
-			// Fast path - the bb is too small to be sent to the client yet.
-			return
-		}
-
-		// Slow path - the bb must be sent to the client.
-		if err := sendBuf(bb); err != nil {
-			errGlobalLock.Lock()
-			if errGlobal != nil {
-				errGlobal = err
+		for i, timestamp := range timestamps {
+			fields := make([]logstorage.Field, 0, len(columns))
+			for j := range columns {
+				if columns[j].Values[i] != "" {
+					fields = append(fields, logstorage.Field{Name: clonedColumnNames[j], Value: strings.Clone(columns[j].Values[i])})
+				}
 			}
-			errGlobalLock.Unlock()
+
+			rowsLock.Lock()
+			rows = append(rows, row{
+				timestamp: timestamp,
+				fields:    fields,
+			})
+			rowsLock.Unlock()
+		}
+	}
+	logger.Infof("FindTraces query: %s", q.String())
+	if err = vlstorage.RunQuery(ctx, cp., q, writeBlock); err != nil {
+		return nil, err
+	}
+	tracesMap := make(map[string]*model.Trace)
+	traces := make([]*model.Trace, len(traceIDs), len(traceIDs))
+	for i := range traceIDs {
+		traces[i] = &model.Trace{}
+		tracesMap[traceIDs[i]] = traces[i]
+	}
+
+	for i := range rows {
+		sp, err := jaeger.FieldsToSpan(rows[i].fields)
+		if err != nil {
+			logger.Errorf("cannot unmarshal log fields [%v] to span: %s", rows[i].fields, err)
+			continue
+		}
+
+		tracesMap[sp.TraceID.String()].Spans = append(tracesMap[sp.TraceID.String()].Spans, sp)
+	}
+	return traces, nil
+}
+
+func processGetTraceIDsRequest(ctx context.Context, cp *commonParams, query *traceQueryParameters) ([]string, error) {
+	start := time.Now()
+	defer func() {
+		logger.Infof("FindTraceIDs finished in %dms", time.Since(start).Milliseconds())
+	}()
+	qStr := ""
+	if query.ServiceName != "" {
+		qStr += fmt.Sprintf("AND _stream:{"+ResourceAttrPrefix+"service.name"+"=\"%s\"} ", query.ServiceName)
+	}
+	if query.OperationName != "" {
+		qStr += fmt.Sprintf("AND _stream:{"+Name+"=\"%s\"} ", query.OperationName)
+	}
+
+	if len(query.Tags) > 0 {
+		for k, v := range query.Tags {
+			qStr += fmt.Sprintf(`AND "`+SpanAttrPrefix+`%s":=%s `, k, v)
+		}
+	}
+	if query.DurationMin > 0 {
+		qStr += fmt.Sprintf("AND "+Duration+":>%d ", query.DurationMin.Nanoseconds())
+	}
+	if query.DurationMax > 0 {
+		qStr += fmt.Sprintf("AND duration:<%d ", query.DurationMax.Nanoseconds())
+	}
+	qStr = strings.TrimLeft(qStr+" | last 1 by (_time) partition by ("+TraceId+") | fields _time, "+TraceId+" | sort by (_time) desc", "AND ")
+
+	logger.Infof("FindTraceIDs query debug: %s", qStr)
+	q, err := logstorage.ParseQueryAtTimestamp(qStr, query.StartTimeMax.UnixNano())
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse query [%s]: %s", qStr, err)
+	}
+	q.AddPipeLimit(uint64(query.NumTraces))
+
+	traceIDs, err := findTraceIDsSplitTimeRange(ctx, q, cp, query.StartTimeMin, query.StartTimeMax, query.NumTraces)
+	if err != nil {
+		return nil, err
+	}
+
+	return traceIDs, nil
+}
+
+// findTraceIDsSplitTimeRange try to search from the nearest time range of the end time.
+// if the result already met requirement of `limit`, return.
+// otherwise, amplify the time range to 5x and search again, until the start time exceed the input.
+func findTraceIDsSplitTimeRange(ctx context.Context, q *logstorage.Query, cp *commonParams, startTime, endTime time.Time, limit int) ([]string, error) {
+	step := time.Minute
+	startTimeCurrent := endTime.Add(-step)
+	traceIDList := make([]string, 0, 10)
+	writeBlock := func(_ uint, db *logstorage.DataBlock) {
+		columns := db.Columns
+		for i := range columns {
+			if columns[i].Name == "trace_id" {
+				for _, v := range columns[i].Values {
+					traceIDList = append(traceIDList, v)
+				}
+
+			}
 		}
 	}
 
-	if err := vlstorage.RunQuery(ctx, cp.TenantIDs, cp.Query, writeBlock); err != nil {
-		return err
-	}
-	if errGlobal != nil {
-		return errGlobal
-	}
-
-	// Send the remaining data
-	for _, bb := range bufs.GetSlice() {
-		if err := sendBuf(bb); err != nil {
-			return err
+	for startTimeCurrent.After(startTime) {
+		qClone := q.CloneWithTimeFilter(endTime.UnixNano(), startTimeCurrent.UnixNano(), endTime.UnixNano())
+		logger.Infof("FindTraces query: %s", qClone.String())
+		if err := vlstorage.RunQuery(ctx, cp.TenantIDs, qClone, writeBlock); err != nil {
+			return nil, err
 		}
+		if len(traceIDList) == limit {
+			return traceIDList, nil
+		}
+		traceIDList = traceIDList[:0]
+		step *= 5
+		startTimeCurrent = startTimeCurrent.Add(-step)
 	}
 
-	return nil
+	// one last try with input time range
+	qClone := q.CloneWithTimeFilter(endTime.UnixNano(), startTimeCurrent.UnixNano(), endTime.UnixNano())
+	logger.Infof("FindTraces query: %s", qClone.String())
+	if err := vlstorage.RunQuery(ctx, cp.TenantIDs, qClone, writeBlock); err != nil {
+		return nil, err
+	}
+	return traceIDList, nil
 }
 
 type commonParams struct {
@@ -167,32 +338,4 @@ func getCommonParams(r *http.Request) (*commonParams, error) {
 		TenantIDs: tenantIDs,
 	}
 	return cp, nil
-}
-
-func writeValuesWithHits(w http.ResponseWriter, vhs []logstorage.ValueWithHits, disableCompression bool) error {
-	var b []byte
-	for i := range vhs {
-		b = vhs[i].Marshal(b)
-	}
-
-	if !disableCompression {
-		b = zstd.CompressLevel(nil, b, 1)
-	}
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-
-	if _, err := w.Write(b); err != nil {
-		return fmt.Errorf("cannot send response to the client: %w", err)
-	}
-
-	return nil
-}
-
-func getInt64FromRequest(r *http.Request, argName string) (int64, error) {
-	s := r.FormValue(argName)
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("cannot parse %s=%q: %w", argName, s, err)
-	}
-	return n, nil
 }
